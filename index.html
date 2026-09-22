@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Panel Financiero — Taller</title>
+
+<!--
+  ============================================================
+  CONFIGURACIÓN — completá estos valores antes de publicar
+  ============================================================
+-->
+<script>
+  // Los sacás de tu proyecto en supabase.com → Settings → API
+  window.SUPABASE_URL = "https://cjjkmcsuoexidadjsmzt.supabase.co";
+  window.SUPABASE_ANON_KEY = "sb_publishable_MJ2I_nJYJAYLQz6wDYJZMw_6lN-sAHU";
+
+  // Tu número de WhatsApp en formato internacional, sin "+" ni espacios ni guiones.
+  // Ejemplo Argentina (Buenos Aires, celular): 5491122334455
+  window.WHATSAPP_NUMBER = "5492225519387";
+
+  // URL del Google Sheet del proveedor, publicado como CSV.
+  // Cómo obtenerla: en el Sheet → Archivo → Compartir → Publicar en la web →
+  // elegís la pestaña con los precios → formato "Valores separados por comas (.csv)" → Publicar.
+  // Te da un link tipo: https://docs.google.com/spreadsheets/d/e/XXXXXXX/pub?gid=0&single=true&output=csv
+
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  :root{
+    --bg: #0a0e14;
+    --surface: #12161f;
+    --surface-2: #1a2029;
+    --surface-3: #212938;
+    --border: #262d3a;
+    --border-soft: #1c222c;
+    --text: #f4f6f9;
+    --text-dim: #8993a4;
+    --text-faint: #57616f;
+    --accent: #38bdf8;
+    --accent-soft: rgba(56,189,248,0.13);
+    --income: #34d399;
+    --income-soft: rgba(52,211,153,0.13);
+    --income-border: rgba(52,211,153,0.35);
+    --expense: #f87171;
+    --expense-soft: rgba(248,113,113,0.13);
+    --expense-border: rgba(248,113,113,0.35);
+    --amber: #fbbf24;
+    --radius: 14px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:
+      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0) 0 0/22px 22px,
+      var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    padding-bottom: 84px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--accent-soft); }
+  input::placeholder, textarea::placeholder{ color: var(--text-faint); }
+  a{ color: inherit; }
+
+  /* ---------- Auth screen ---------- */
+  #auth-screen, .recovery-screen{
+    min-height: 100vh; width: 100%; display:flex; align-items:center; justify-content:center; padding: 20px;
+  }
+  .auth-wrap{
+    width: 100%; max-width: 380px; margin: 0 auto;
+  }
+  .auth-card{
+    width: 100%; background: var(--surface); border:1px solid var(--border);
+    border-radius: var(--radius); padding: 28px 24px; text-align:center;
+  }
+  .auth-mark{
+    width:44px; height:44px; border-radius:12px; background: var(--surface-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; margin: 0 auto 16px;
+  }
+  .auth-card h1{ font-size:16px; margin:0 0 4px; }
+  .auth-card p{ font-size:13px; color: var(--text-dim); margin: 0 0 20px; line-height:1.5; }
+  .auth-card input{
+    width:100%; background: var(--surface-2); border:1px solid var(--border-soft);
+    border-radius:10px; padding:11px 12px; color:var(--text); font-size:14px; outline:none;
+    margin-bottom:12px; text-align:center;
+  }
+  .auth-card input:focus{ border-color: rgba(56,189,248,0.5); }
+  .password-field-wrap{ position:relative; margin-bottom:12px; }
+  .password-field-wrap input{ padding-right:42px; margin-bottom:0; }
+  .toggle-password-btn{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    width:30px; height:30px; background:transparent; border:none; color: var(--text-faint);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .toggle-password-btn:hover{ color: var(--accent); }
+  .toggle-password-btn svg{ width:17px; height:17px; }
+  .auth-btn{
+    width:100%; padding:12px 0; border-radius:11px; border:none; cursor:pointer;
+    font-size:14px; font-weight:700; background: var(--accent); color:#031824;
+  }
+  .auth-btn:disabled{ opacity:0.6; cursor:default; }
+  .auth-status{ font-size:12.5px; color: var(--text-dim); margin-top:14px; min-height:16px; }
+  .auth-status.error{ color: var(--expense); }
+  .auth-status.ok{ color: var(--income); }
+  .config-warning{
+    width:100%; margin: 0 0 18px; background: var(--expense-soft); border:1px solid var(--expense-border);
+    border-radius:10px; padding:12px 14px; font-size:12.5px; color: var(--expense); text-align:left; line-height:1.5;
+    box-sizing:border-box;
+  }
+
+  .auth-link-btn{
+    display:block; width:100%; background:transparent; border:none; color: var(--text-faint);
+    font-size:12px; margin-top:12px; cursor:pointer; text-decoration:underline;
+    text-underline-offset:2px;
+  }
+  .auth-link-btn:first-of-type{ margin-top:16px; }
+  .auth-link-btn:hover{ color: var(--accent); }
+
+
+  #app-root{ display:none; }
+  #app-root.visible{ display:block; }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    background: rgba(10,14,20,0.85);
+    backdrop-filter: blur(8px);
+    position: sticky; top:0; z-index: 20;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:32px; height:32px; border-radius:9px;
+    background: var(--surface-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .brand-mark svg{ width:16px; height:16px; }
+  .brand-name{ font-size:14.5px; font-weight:600; letter-spacing:0.1px; }
+  .brand-sub{ font-size:11.5px; color:var(--text-faint); }
+
+  .topbar-right{ display:flex; align-items:center; gap:10px; }
+
+  .tabs-desktop{ display:none; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:4px; }
+  .tabs-desktop button{
+    border:none; background:transparent; color:var(--text-dim);
+    padding:8px 16px; border-radius:9px; font-size:13.5px; font-weight:600;
+    cursor:pointer; transition: background .15s ease, color .15s ease;
+  }
+  .tabs-desktop button.active{ background: var(--surface-3); color: var(--text); }
+
+  .logout-btn{
+    background:transparent; border:1px solid var(--border-soft); color: var(--text-dim);
+    padding:7px 12px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .logout-btn:hover{ border-color: var(--expense); color: var(--expense); }
+
+  /* ---------- Layout ---------- */
+  .container{ max-width: 980px; margin: 0 auto; padding: 22px 18px 10px; }
+  .tab-panel{ display:none; animation: fadeIn .18s ease; }
+  .tab-panel.active{ display:block; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  h2.section-title{ font-size:15px; color:var(--text-dim); font-weight:600; margin: 0 0 14px; }
+
+  /* ---------- Cards ---------- */
+  .card{
+    background: var(--surface); border:1px solid var(--border);
+    border-radius: var(--radius); padding: 18px;
+  }
+
+  .stat-grid{ display:grid; grid-template-columns: 1fr; gap:12px; margin-bottom:18px; }
+  .stat-card{ background:var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding:16px 18px; }
+  .stat-label{ font-size:12.5px; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .stat-value{ font-family: var(--mono); font-size:26px; font-weight:600; margin-top:8px; font-variant-numeric: tabular-nums; }
+  .stat-card.income .stat-value{ color: var(--income); }
+  .stat-card.expense .stat-value{ color: var(--expense); }
+  .stat-card.balance .stat-value{ color: var(--text); }
+  .stat-card.balance.negative .stat-value{ color: var(--expense); }
+
+  .period-row{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .chip-btn{
+    border:1px solid var(--border); background:var(--surface); color:var(--text-dim);
+    padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:600; cursor:pointer;
+    transition: all .15s ease;
+  }
+  .chip-btn.active{ background: var(--accent-soft); border-color: rgba(56,189,248,0.4); color: var(--accent); }
+
+  .breakdown-grid{ display:grid; grid-template-columns: 1fr; gap:14px; margin-top: 4px; }
+  .breakdown-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; font-size:13px; }
+  .breakdown-row:last-child{ margin-bottom:0; }
+  .breakdown-name{ color: var(--text-dim); }
+  .breakdown-amount{ font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .bar-track{ height:6px; border-radius:99px; background: var(--surface-2); overflow:hidden; margin-top:6px; margin-bottom:14px; }
+  .bar-fill{ height:100%; border-radius:99px; transition: width .3s ease; }
+
+  /* ---------- Forms ---------- */
+  .form-card{ background:var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding:20px; max-width: 480px; margin: 0 auto; }
+  .field{ margin-bottom:16px; }
+  .field label{ font-size:12.5px; color:var(--text-dim); display:block; margin-bottom:6px; }
+  .field input[type="text"], .field input[type="date"], .field input[type="number"]{
+    width:100%; background: var(--surface-2); border:1px solid var(--border-soft);
+    border-radius:10px; padding:11px 12px; color:var(--text); font-size:14px; outline:none;
+    font-family: var(--font);
+  }
+  .field input[type="number"]{ font-family: var(--mono); }
+  .field input:focus{ border-color: rgba(56,189,248,0.5); }
+  .field .error-msg{ font-size:11.5px; color: var(--expense); margin-top:5px; display:none; }
+  .field.has-error input{ border-color: var(--expense); }
+  .field.has-error .error-msg{ display:block; }
+
+  .seg-group{ display:flex; gap:8px; flex-wrap:wrap; }
+  .seg-btn{
+    flex:1; min-width: 120px; border:1px solid var(--border-soft); background:var(--surface-2);
+    color:var(--text-dim); padding:10px 8px; border-radius:10px; font-size:13px; font-weight:600;
+    cursor:pointer; text-align:center; transition: all .15s ease;
+  }
+  .seg-btn.active.type-income{ background: var(--income-soft); border-color: var(--income-border); color: var(--income); }
+  .seg-btn.active.type-expense{ background: var(--expense-soft); border-color: var(--expense-border); color: var(--expense); }
+  .seg-btn.active.type-neutral{ background: var(--accent-soft); border-color: rgba(56,189,248,0.4); color: var(--accent); }
+
+  .seg-grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+
+  .submit-btn{
+    width:100%; padding:13px 0; border-radius:11px; border:none; cursor:pointer;
+    font-size:14.5px; font-weight:700; margin-top: 4px;
+  }
+  .submit-btn:disabled{ opacity:0.6; cursor:default; }
+  .submit-btn.income{ background: var(--income); color: #04140d; }
+  .submit-btn.expense{ background: var(--expense); color: #1a0505; }
+
+  /* ---------- History ---------- */
+  .history-toolbar{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; align-items:center; justify-content:space-between; }
+  .filter-chips{ display:flex; gap:8px; }
+  .search-export{ display:flex; gap:8px; flex:1; min-width:220px; }
+  .search-input{
+    flex:1; background: var(--surface-2); border:1px solid var(--border-soft); border-radius:10px;
+    padding:9px 12px; color:var(--text); font-size:13px; outline:none;
+  }
+  .export-btn{
+    display:flex; align-items:center; gap:6px; background: var(--surface-2); border:1px solid var(--border);
+    color:var(--text); padding:9px 14px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;
+    white-space:nowrap;
+  }
+  .export-btn:hover{ border-color: var(--accent); }
+  .export-btn svg{ width:14px; height:14px; }
+
+  table.history-table{ width:100%; border-collapse: collapse; font-size:13.5px; }
+  .history-table thead th{
+    text-align:left; font-size:11.5px; color:var(--text-faint); font-weight:600;
+    padding:0 10px 10px; border-bottom:1px solid var(--border-soft);
+  }
+  .history-table tbody td{ padding:12px 10px; border-bottom:1px solid var(--border-soft); vertical-align:middle; }
+  .history-table tbody tr:last-child td{ border-bottom:none; }
+  .badge{ display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:700; }
+  .badge.income{ background: var(--income-soft); color: var(--income); }
+  .badge.reparacion{ background: var(--accent-soft); color: var(--accent); }
+  .badge.expense{ background: var(--expense-soft); color: var(--expense); }
+  .desc-cell .sub{ color: var(--text-faint); font-size:11.5px; margin-top:2px; }
+  .amount-cell{ font-family: var(--mono); font-weight:700; font-variant-numeric: tabular-nums; text-align:right; }
+  .amount-cell.income{ color: var(--income); }
+  .amount-cell.expense{ color: var(--expense); }
+  .action-cell{ text-align:right; white-space:nowrap; }
+  .icon-btn{
+    background:transparent; border:1px solid var(--border-soft); color: var(--text-dim);
+    width:30px; height:30px; border-radius:8px; cursor:pointer; display:inline-flex;
+    align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ border-color: var(--expense); color: var(--expense); }
+  .icon-btn svg{ width:14px; height:14px; }
+  .confirm-inline{ display:inline-flex; gap:6px; align-items:center; }
+  .confirm-inline button{ border:none; border-radius:8px; padding:5px 9px; font-size:11.5px; font-weight:700; cursor:pointer; }
+  .confirm-yes{ background: var(--expense); color:#1a0505; }
+  .confirm-no{ background: var(--surface-2); color: var(--text-dim); border:1px solid var(--border-soft) !important; }
+
+  .empty-state{ text-align:center; padding: 48px 12px; color: var(--text-faint); font-size:13.5px; line-height:1.6; }
+
+  /* ---------- Toast ---------- */
+  .toast{
+    position: fixed; left:50%; bottom: 90px; transform: translateX(-50%) translateY(20px);
+    background: var(--surface-3); border:1px solid var(--border); color:var(--text);
+    padding: 11px 18px; border-radius: 999px; font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none; transition: all .25s ease; z-index: 50;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- Bottom nav (mobile) ---------- */
+  .bottom-nav{
+    position: fixed; bottom:0; left:0; right:0; z-index:30;
+    display:flex; background: rgba(10,14,20,0.92); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border-soft);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  }
+  .bottom-nav button{
+    flex:1; background:transparent; border:none; color: var(--text-faint);
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:6px 0; font-size:10.5px; font-weight:600; cursor:pointer;
+  }
+  .bottom-nav button svg{ width:19px; height:19px; }
+  .bottom-nav button.active{ color: var(--accent); }
+
+
+  /* ---------- Cotizador ---------- */
+  .field select{
+    width:100%; -webkit-appearance:none; -moz-appearance:none; appearance:none;
+    background-color: var(--surface-2);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238993a4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+    border:1px solid var(--border-soft); border-radius:10px; padding:11px 34px;
+    color:var(--text); font-size:14px; outline:none; font-family: var(--font);
+    text-align:center; text-align-last:center; -moz-text-align-last:center; cursor:pointer;
+  }
+  .field select:focus{ border-color: rgba(56,189,248,0.5); }
+  .field select option{ background: var(--surface-3); color: var(--text); text-align:left; }
+
+  .cotizar-btn-wrap{ display:flex; justify-content:center; margin-top:20px; }
+  .cotizar-btn{
+    padding:13px 48px; border-radius:999px; border:none; cursor:pointer;
+    font-size:14.5px; font-weight:700; background: var(--income); color:#04140d;
+  }
+  .cotizar-btn:disabled{ opacity:0.6; cursor:default; }
+
+  .quote-status{ font-size:13px; padding:12px 14px; border-radius:10px; margin-top:14px; display:none; }
+  .quote-status.show{ display:block; }
+  .quote-status.warn{ background: var(--expense-soft); border:1px solid var(--expense-border); color: var(--expense); }
+
+  /* ---------- Modal de cotización ---------- */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6);
+    align-items:center; justify-content:center; padding:20px; z-index:60;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-card{
+    position:relative; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;
+    background: var(--surface); border:1px solid var(--border); border-radius:18px; padding:26px 22px 22px;
+  }
+  .modal-close-btn{
+    position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:9px;
+    background: var(--surface-2); border:1px solid var(--border-soft); color: var(--text-dim);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .modal-close-btn:hover{ color: var(--accent); border-color: rgba(56,189,248,0.4); }
+  .modal-close-btn svg{ width:15px; height:15px; }
+
+  .mq-title{ text-align:center; font-size:16px; font-weight:700; margin-bottom:2px; }
+  .mq-subtitle{ text-align:center; font-size:12.5px; color: var(--text-dim); margin-bottom:18px; }
+  .mq-line{ display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border-soft); font-size:13.5px; color: var(--text-dim); }
+  .mq-line .mq-amount{ font-family: var(--mono); color: var(--text); font-weight:600; }
+  .mq-total{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft); font-size:15px; font-weight:700; }
+  .mq-total .mq-total-amount{ font-family: var(--mono); font-size:22px; color: var(--income); }
+  .mq-source{ font-size:11px; color: var(--text-faint); margin-top:10px; text-align:center; }
+  .mq-loading{ text-align:center; padding:30px 0; color: var(--text-dim); font-size:13.5px; }
+  .whatsapp-btn{
+    width:100%; margin-top:18px; padding:13px 0; border-radius:11px; border:none; cursor:pointer;
+    font-size:14.5px; font-weight:700; background:#25d366; color:#04140d;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .whatsapp-btn svg{ width:17px; height:17px; }
+
+  @media (min-width: 760px){
+    body{ padding-bottom: 40px; }
+    .bottom-nav{ display:none; }
+    .tabs-desktop{ display:flex; }
+    .container{ padding: 30px 24px 20px; }
+    .stat-grid{ grid-template-columns: repeat(3, 1fr); }
+    .breakdown-grid{ grid-template-columns: 1fr 1fr; }
+    table.history-table thead{ display: table-header-group; }
+    .history-table tbody tr{ display: table-row; }
+  }
+
+  @media (max-width: 759px){
+    table.history-table thead{ display:none; }
+    .history-table, .history-table tbody, .history-table tbody tr, .history-table tbody td{ display:block; width:100%; }
+    .history-table tbody tr{
+      background: var(--surface-2); border:1px solid var(--border-soft); border-radius:12px;
+      padding: 12px; margin-bottom:10px;
+    }
+    .history-table tbody td{ border:none; padding: 4px 0; }
+    .history-table tbody td[data-label]::before{
+      content: attr(data-label); display:block; font-size:10.5px; color:var(--text-faint);
+      margin-bottom:2px; font-weight:600;
+    }
+    .amount-cell, .action-cell{ text-align:left; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- ================= AUTH SCREEN ================= -->
+  <div id="auth-screen">
+    <div class="auth-wrap">
+      <div id="config-warning" class="config-warning" style="display:none;">
+        Todavía no completaste <strong>SUPABASE_URL</strong> y <strong>SUPABASE_ANON_KEY</strong> arriba en el archivo.
+        Sin eso, la app no puede guardar datos.
+      </div>
+      <div class="auth-card">
+        <div class="auth-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"></rect><line x1="10" y1="19" x2="14" y2="19"></line></svg>
+        </div>
+        <h1>Mi Taller</h1>
+        <p id="auth-desc">Iniciá sesión con tu email y contraseña.</p>
+        <input type="email" id="auth-email" placeholder="tu@email.com" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="password-field-wrap">
+          <input type="password" id="auth-password" placeholder="Contraseña" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button type="button" class="toggle-password-btn" id="btn-toggle-password" aria-label="Mostrar contraseña">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
+        <button class="auth-btn" id="auth-submit">Iniciar sesión</button>
+        <div class="auth-status" id="auth-status"></div>
+        <button class="auth-link-btn" id="btn-auth-toggle">¿Primera vez? Crear cuenta</button>
+        <button class="auth-link-btn" id="btn-forgot-password">¿Olvidaste tu contraseña?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NUEVA CONTRASEÑA (tras link de recuperación) ================= -->
+  <div id="recovery-screen" class="recovery-screen" style="display:none;">
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"></rect><line x1="10" y1="19" x2="14" y2="19"></line></svg>
+        </div>
+        <h1>Elegí una nueva contraseña</h1>
+        <p>Esta va a ser tu contraseña a partir de ahora para iniciar sesión.</p>
+        <div class="password-field-wrap">
+          <input type="password" id="recovery-password" placeholder="Nueva contraseña (mínimo 6 caracteres)" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="password-field-wrap">
+          <input type="password" id="recovery-password-confirm" placeholder="Repetir contraseña" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <button class="auth-btn" id="recovery-submit">Guardar nueva contraseña</button>
+        <div class="auth-status" id="recovery-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= APP ================= -->
+  <div id="app-root">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"></rect><line x1="10" y1="19" x2="14" y2="19"></line></svg>
+        </div>
+        <div>
+          <div class="brand-name">Mi Taller</div>
+          <div class="brand-sub">Panel financiero</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <nav class="tabs-desktop">
+          <button data-tab="resumen" class="active">Resumen</button>
+          <button data-tab="ingreso">Ingreso</button>
+          <button data-tab="egreso">Egreso</button>
+          <button data-tab="historial">Historial</button>
+          <button data-tab="cotizador">Cotizador</button>
+        </nav>
+        <button class="logout-btn" id="btn-logout">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <!-- ================= RESUMEN ================= -->
+      <section id="tab-resumen" class="tab-panel active">
+        <div class="period-row" id="period-row">
+          <button class="chip-btn" data-period="today">Hoy</button>
+          <button class="chip-btn" data-period="week">Esta semana</button>
+          <button class="chip-btn" data-period="month">Este mes</button>
+          <button class="chip-btn active" data-period="all">Todo</button>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card income">
+            <div class="stat-label">Total ingresado</div>
+            <div class="stat-value" id="stat-income">$0</div>
+          </div>
+          <div class="stat-card expense">
+            <div class="stat-label">Total gastado</div>
+            <div class="stat-value" id="stat-expense">$0</div>
+          </div>
+          <div class="stat-card balance" id="stat-balance-card">
+            <div class="stat-label">Ganancia neta / Balance</div>
+            <div class="stat-value" id="stat-balance">$0</div>
+          </div>
+        </div>
+
+        <div class="breakdown-grid">
+          <div class="card">
+            <h2 class="section-title">Ingresos por tipo</h2>
+            <div id="breakdown-income"></div>
+          </div>
+          <div class="card">
+            <h2 class="section-title">Gastos por categoría</h2>
+            <div id="breakdown-expense"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= INGRESO ================= -->
+      <section id="tab-ingreso" class="tab-panel">
+        <h2 class="section-title">Registrar ingreso</h2>
+        <div class="form-card">
+          <div class="field">
+            <label>Tipo de ingreso</label>
+            <div class="seg-group" data-group="income-type">
+              <button type="button" class="seg-btn type-income active" data-value="venta">Venta</button>
+              <button type="button" class="seg-btn type-income" data-value="reparacion">Reparación</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="income-date">Fecha</label>
+            <input type="date" id="income-date">
+          </div>
+          <div class="field" id="income-desc-field">
+            <label for="income-desc">Descripción / modelo del equipo o producto</label>
+            <input type="text" id="income-desc" placeholder="Ej: iPhone 11 — cambio de pantalla">
+            <div class="error-msg">Ingresá una descripción.</div>
+          </div>
+          <div class="field" id="income-amount-field">
+            <label for="income-amount">Monto ingresado ($)</label>
+            <input type="number" id="income-amount" min="0" step="0.01" placeholder="0">
+            <div class="error-msg">Ingresá un monto válido, mayor a 0.</div>
+          </div>
+          <div class="field">
+            <label>Método de pago</label>
+            <div class="seg-group" data-group="income-method">
+              <button type="button" class="seg-btn type-neutral active" data-value="efectivo">Efectivo</button>
+              <button type="button" class="seg-btn type-neutral" data-value="transferencia">Transferencia</button>
+              <button type="button" class="seg-btn type-neutral" data-value="tarjeta">Tarjeta</button>
+            </div>
+          </div>
+          <button class="submit-btn income" id="btn-submit-income">Registrar ingreso</button>
+        </div>
+      </section>
+
+      <!-- ================= EGRESO ================= -->
+      <section id="tab-egreso" class="tab-panel">
+        <h2 class="section-title">Registrar egreso</h2>
+        <div class="form-card">
+          <div class="field">
+            <label>Categoría del gasto</label>
+            <div class="seg-grid-2" data-group="expense-category">
+              <button type="button" class="seg-btn type-expense active" data-value="repuestos">Repuestos / Módulos</button>
+              <button type="button" class="seg-btn type-expense" data-value="herramientas">Herramientas / Insumos</button>
+              <button type="button" class="seg-btn type-expense" data-value="servicios">Servicios externos / Software</button>
+              <button type="button" class="seg-btn type-expense" data-value="fijos">Gastos fijos / Varios</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="expense-date">Fecha</label>
+            <input type="date" id="expense-date">
+          </div>
+          <div class="field" id="expense-desc-field">
+            <label for="expense-desc">Descripción del gasto</label>
+            <input type="text" id="expense-desc" placeholder="Ej: Pantalla Samsung A32 x3">
+            <div class="error-msg">Ingresá una descripción.</div>
+          </div>
+          <div class="field" id="expense-amount-field">
+            <label for="expense-amount">Monto gastado ($)</label>
+            <input type="number" id="expense-amount" min="0" step="0.01" placeholder="0">
+            <div class="error-msg">Ingresá un monto válido, mayor a 0.</div>
+          </div>
+          <button class="submit-btn expense" id="btn-submit-expense">Registrar gasto</button>
+        </div>
+      </section>
+
+      <!-- ================= HISTORIAL ================= -->
+      <section id="tab-historial" class="tab-panel">
+        <h2 class="section-title">Historial de transacciones</h2>
+        <div class="card">
+          <div class="history-toolbar">
+            <div class="filter-chips">
+              <button class="chip-btn active" data-filter="all">Todos</button>
+              <button class="chip-btn" data-filter="income">Ingresos</button>
+              <button class="chip-btn" data-filter="expense">Egresos</button>
+            </div>
+            <div class="search-export">
+              <input type="text" id="search-input" class="search-input" placeholder="Buscar por descripción...">
+              <button class="export-btn" id="btn-export">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                CSV
+              </button>
+            </div>
+          </div>
+
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Detalle</th>
+                <th style="text-align:right">Monto</th>
+                <th style="text-align:right">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+          <div id="history-empty" class="empty-state" style="display:none;">
+            No hay movimientos registrados todavía.<br>Registrá el primero desde la pestaña Ingreso o Egreso.
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= COTIZADOR ================= -->
+      <section id="tab-cotizador" class="tab-panel">
+        <h2 class="section-title">Cotizador de reparaciones</h2>
+
+        <div class="form-card">
+          <div id="cotizador-config-warning" class="config-warning" style="display:none;">
+            Falta configurar <strong>WHATSAPP_NUMBER</strong> arriba en el archivo para poder enviar la cotización por WhatsApp.
+          </div>
+
+          <div class="field">
+            <label for="cot-marca">Marca</label>
+            <select id="cot-marca">
+              <option value="Samsung">Samsung</option>
+              <option value="Motorola">Motorola</option>
+              <option value="Xiaomi">Xiaomi</option>
+              <option value="iPhone">iPhone (Apple)</option>
+              <option value="Huawei">Huawei</option>
+              <option value="LG">LG</option>
+              <option value="otra">Otra marca...</option>
+            </select>
+          </div>
+
+          <div class="field" id="cot-marca-otra-field" style="display:none;">
+            <label for="cot-marca-otra">¿Cuál marca?</label>
+            <input type="text" id="cot-marca-otra" placeholder="Ej: Nokia, ZTE, Alcatel...">
+          </div>
+
+          <div class="field">
+            <label for="cot-modelo">Modelo del equipo</label>
+            <input type="text" id="cot-modelo" placeholder="Ej: Galaxy A23, Moto G22, iPhone 11...">
+          </div>
+
+          <div class="field">
+            <label for="cot-reparacion">Reparación</label>
+            <select id="cot-reparacion">
+              <option value="modulo">Módulo / Pantalla</option>
+              <option value="bateria">Batería</option>
+              <option value="pin_carga">Pin de carga</option>
+              <option value="camara">Cámara</option>
+              <option value="parlante">Parlante</option>
+              <option value="microfono">Micrófono</option>
+            </select>
+          </div>
+
+          <div class="quote-status warn" id="cot-status"></div>
+
+          <div class="cotizar-btn-wrap">
+            <button class="cotizar-btn" id="btn-cotizar">Cotizar</button>
+          </div>
+        </div>
+
+        <p style="text-align:center; font-size:11.5px; color: var(--text-faint); margin-top:16px;">
+          El precio del repuesto se toma como referencia de Mercado Libre y puede variar. Verificá siempre antes de confirmar con el cliente.
+        </p>
+      </section>
+
+    </main>
+
+    <!-- ================= MODAL DE COTIZACIÓN ================= -->
+    <div class="modal-overlay" id="quote-modal">
+      <div class="modal-card">
+        <button class="modal-close-btn" id="btn-close-modal" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div id="modal-body">
+          <!-- contenido inyectado por JS -->
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button data-tab="resumen" class="active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="4" height="8"></rect><rect x="10" y="8" width="4" height="12"></rect><rect x="17" y="4" width="4" height="16"></rect></svg>
+        Resumen
+      </button>
+      <button data-tab="ingreso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+        Ingreso
+      </button>
+      <button data-tab="egreso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+        Egreso
+      </button>
+      <button data-tab="historial">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.1-2.8-2.8L7 14"></path></svg>
+        Historial
+      </button>
+      <button data-tab="cotizador">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+        Cotizador
+      </button>
+      </nav>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===================== Supabase setup ===================== */
+  var SUPABASE_URL = (window.SUPABASE_URL || "").trim().replace(/\/+$/, "");
+  var SUPABASE_ANON_KEY = (window.SUPABASE_ANON_KEY || "").trim();
+  var configOk = SUPABASE_URL && SUPABASE_ANON_KEY &&
+    SUPABASE_URL.indexOf("PEGA_ACA") === -1 && SUPABASE_ANON_KEY.indexOf("PEGA_ACA") === -1;
+
+  if(!configOk){
+    document.getElementById("config-warning").style.display = "block";
+  }
+
+  var sb = configOk ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  var transactions = [];
+  var currentUser = null;
+
+  /* ===================== Helpers ===================== */
+  function todayStr(){
+    var d = new Date();
+    var off = d.getTimezoneOffset();
+    var local = new Date(d.getTime() - off*60000);
+    return local.toISOString().slice(0,10);
+  }
+
+  var INCOME_TYPE_LABEL = { venta: "Venta", reparacion: "Reparación" };
+  var EXPENSE_CATEGORY_LABEL = {
+    repuestos: "Repuestos / Módulos",
+    herramientas: "Herramientas / Insumos",
+    servicios: "Servicios externos / Software",
+    fijos: "Gastos fijos / Varios"
+  };
+  var PAYMENT_METHOD_LABEL = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta" };
+
+  function formatMoney(n){
+    return new Intl.NumberFormat("es-AR", { style:"currency", currency:"ARS", maximumFractionDigits: 0 }).format(Math.round(n || 0));
+  }
+  function formatDate(iso){
+    var d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"numeric" });
+  }
+  function escapeHtml(str){
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /* ===================== Toast ===================== */
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 2400);
+  }
+
+  /* ===================== Auth ===================== */
+  var authEmailInput = document.getElementById("auth-email");
+  var authPasswordInput = document.getElementById("auth-password");
+  var authSubmitBtn = document.getElementById("auth-submit");
+  var authStatus = document.getElementById("auth-status");
+  var authScreen = document.getElementById("auth-screen");
+  var appRoot = document.getElementById("app-root");
+  var authMode = "login"; // "login" | "signup"
+
+  document.getElementById("btn-toggle-password").addEventListener("click", function(){
+    var isHidden = authPasswordInput.type === "password";
+    authPasswordInput.type = isHidden ? "text" : "password";
+    this.style.color = isHidden ? "var(--accent)" : "";
+  });
+
+  function setAuthStatus(msg, kind){
+    authStatus.textContent = msg;
+    authStatus.className = "auth-status" + (kind ? " " + kind : "");
+  }
+
+  function updateAuthUI(){
+    var forgotBtn = document.getElementById("btn-forgot-password");
+    var toggleBtn = document.getElementById("btn-auth-toggle");
+    var desc = document.getElementById("auth-desc");
+    if(authMode === "login"){
+      authSubmitBtn.textContent = "Iniciar sesión";
+      toggleBtn.textContent = "¿Primera vez? Crear cuenta";
+      desc.textContent = "Iniciá sesión con tu email y contraseña.";
+      forgotBtn.style.display = "block";
+    }else{
+      authSubmitBtn.textContent = "Crear cuenta";
+      toggleBtn.textContent = "¿Ya tenés cuenta? Iniciar sesión";
+      desc.textContent = "Creá tu cuenta con un email y una contraseña (mínimo 6 caracteres).";
+      forgotBtn.style.display = "none";
+    }
+    setAuthStatus("");
+  }
+
+  document.getElementById("btn-auth-toggle").addEventListener("click", function(){
+    authMode = authMode === "login" ? "signup" : "login";
+    updateAuthUI();
+  });
+
+  document.getElementById("btn-forgot-password").addEventListener("click", function(){
+    if(!configOk){
+      setAuthStatus("Faltan completar las claves de Supabase en el archivo.", "error");
+      return;
+    }
+    var email = authEmailInput.value.trim().toLowerCase();
+    if(!email || email.indexOf("@") === -1){
+      setAuthStatus("Escribí tu email arriba primero.", "error");
+      return;
+    }
+    setAuthStatus("Enviando instrucciones...");
+    sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href }).then(function(res){
+      if(res.error){
+        setAuthStatus(res.error.message, "error");
+      }else{
+        setAuthStatus("Listo. Revisá tu email para restablecer la contraseña.", "ok");
+      }
+    }).catch(function(err){
+      setAuthStatus("No se pudo conectar con Supabase.", "error");
+      console.error("Fallo de red al hablar con Supabase:", err);
+    });
+  });
+
+  authSubmitBtn.addEventListener("click", function(){
+    if(!configOk){
+      setAuthStatus("Faltan completar las claves de Supabase en el archivo.", "error");
+      return;
+    }
+    var email = authEmailInput.value.trim().toLowerCase();
+    var password = authPasswordInput.value.trim();
+
+    if(!email || email.indexOf("@") === -1){
+      setAuthStatus("Ingresá un email válido.", "error");
+      return;
+    }
+    if(!password || password.length < 6){
+      setAuthStatus("La contraseña debe tener al menos 6 caracteres.", "error");
+      return;
+    }
+
+    authSubmitBtn.disabled = true;
+    setAuthStatus(authMode === "login" ? "Ingresando..." : "Creando cuenta...");
+
+    var authPromise = authMode === "login"
+      ? sb.auth.signInWithPassword({ email: email, password: password })
+      : sb.auth.signUp({ email: email, password: password });
+
+    authPromise.then(function(res){
+      authSubmitBtn.disabled = false;
+      if(res.error){
+        setAuthStatus(res.error.message, "error");
+        console.error("Supabase auth error:", res.error);
+        return;
+      }
+      if(authMode === "signup" && !res.data.session){
+        // el proyecto tiene "Confirm email" activado: hay que confirmar antes de poder entrar
+        setAuthStatus("Cuenta creada. Revisá tu email para confirmarla y después iniciá sesión.", "ok");
+        authMode = "login";
+        updateAuthUI();
+      }
+      // si ya hay sesión, onAuthStateChange se encarga de mostrar la app
+    }).catch(function(err){
+      authSubmitBtn.disabled = false;
+      setAuthStatus("No se pudo conectar con Supabase. Detalle: " + (err && err.message ? err.message : err), "error");
+      console.error("Fallo de red al hablar con Supabase:", err);
+    });
+  });
+
+  updateAuthUI();
+
+  document.getElementById("btn-logout").addEventListener("click", function(){
+    sb.auth.signOut();
+  });
+
+  function showApp(){
+    authScreen.style.display = "none";
+    document.getElementById("recovery-screen").style.display = "none";
+    appRoot.classList.add("visible");
+    loadTransactions();
+  }
+  function showAuth(){
+    appRoot.classList.remove("visible");
+    document.getElementById("recovery-screen").style.display = "none";
+    authScreen.style.display = "flex";
+  }
+  function showRecoveryScreen(){
+    authScreen.style.display = "none";
+    appRoot.classList.remove("visible");
+    document.getElementById("recovery-screen").style.display = "flex";
+  }
+
+  // Si el link del email de "olvidé mi contraseña" trajo un token de recuperación,
+  // hay que pedir la contraseña nueva antes de dejar entrar a la app.
+  // Supabase usa dos formatos posibles según la versión del proyecto:
+  //  - Viejo: #access_token=...&type=recovery  → la sesión se arma sola.
+  //  - Nuevo: ?code=xxxxx                       → hay que canjear ese código por una sesión.
+  var urlParams = new URLSearchParams(window.location.search);
+  var recoveryCode = urlParams.get("code");
+  var isRecoveryFlow = !!recoveryCode || window.location.hash.indexOf("type=recovery") !== -1;
+
+  if(configOk){
+    var initPromise = recoveryCode
+      ? sb.auth.exchangeCodeForSession(window.location.href)
+      : sb.auth.getSession();
+
+    initPromise.then(function(res){
+      if(res.error){
+        console.error("Error procesando el link de recuperación:", res.error);
+      }
+      var session = res.data ? res.data.session : null;
+      currentUser = session ? session.user : null;
+
+      if(isRecoveryFlow){
+        if(session){
+          showRecoveryScreen();
+        }else{
+          showAuth();
+          setAuthStatus("El link de recuperación venció o ya se usó. Pedí uno nuevo.", "error");
+        }
+      }else if(currentUser){
+        showApp();
+      }else{
+        showAuth();
+      }
+    });
+
+    sb.auth.onAuthStateChange(function(event, session){
+      if(event === "PASSWORD_RECOVERY"){
+        isRecoveryFlow = true;
+        showRecoveryScreen();
+        return;
+      }
+      currentUser = session ? session.user : null;
+      if(isRecoveryFlow) return; // esperar a que termine de definir la contraseña nueva
+      if(currentUser) showApp(); else showAuth();
+    });
+  }
+
+  document.getElementById("recovery-submit").addEventListener("click", function(){
+    var statusEl = document.getElementById("recovery-status");
+    function setRecoveryStatus(msg, kind){
+      statusEl.textContent = msg;
+      statusEl.className = "auth-status" + (kind ? " " + kind : "");
+    }
+
+    var pass1 = document.getElementById("recovery-password").value.trim();
+    var pass2 = document.getElementById("recovery-password-confirm").value.trim();
+
+    if(!pass1 || pass1.length < 6){
+      setRecoveryStatus("La contraseña debe tener al menos 6 caracteres.", "error");
+      return;
+    }
+    if(pass1 !== pass2){
+      setRecoveryStatus("Las dos contraseñas no coinciden.", "error");
+      return;
+    }
+
+    var btn = this;
+    btn.disabled = true;
+    setRecoveryStatus("Guardando...");
+
+    sb.auth.updateUser({ password: pass1 }).then(function(res){
+      btn.disabled = false;
+      if(res.error){
+        setRecoveryStatus(res.error.message, "error");
+        return;
+      }
+      isRecoveryFlow = false;
+      history.replaceState(null, "", window.location.pathname); // limpia el token de la URL
+      toast("Contraseña actualizada ✓");
+      showApp();
+    }).catch(function(err){
+      btn.disabled = false;
+      setRecoveryStatus("No se pudo conectar con Supabase.", "error");
+      console.error("Fallo de red al hablar con Supabase:", err);
+    });
+  });
+
+  /* ===================== Tabs ===================== */
+  function showTab(name){
+    document.querySelectorAll(".tab-panel").forEach(function(p){
+      p.classList.toggle("active", p.id === "tab-" + name);
+    });
+    document.querySelectorAll("[data-tab]").forEach(function(btn){
+      btn.classList.toggle("active", btn.dataset.tab === name);
+    });
+    if(name === "historial") renderHistory();
+    if(name === "resumen") renderDashboard();
+    window.scrollTo({ top:0, behavior:"smooth" });
+  }
+  document.querySelectorAll("[data-tab]").forEach(function(btn){
+    btn.addEventListener("click", function(){ showTab(btn.dataset.tab); });
+  });
+
+  /* ===================== Segmented controls ===================== */
+  function setupSegGroup(selector){
+    var group = document.querySelector(selector);
+    if(!group) return;
+    group.querySelectorAll(".seg-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        group.querySelectorAll(".seg-btn").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+      });
+    });
+  }
+  setupSegGroup('[data-group="income-type"]');
+  setupSegGroup('[data-group="income-method"]');
+  setupSegGroup('[data-group="expense-category"]');
+
+  function getSegValue(selector){
+    var active = document.querySelector(selector + " .seg-btn.active");
+    return active ? active.dataset.value : null;
+  }
+
+  function setFieldError(fieldId, hasError){
+    var field = document.getElementById(fieldId);
+    if(field) field.classList.toggle("has-error", hasError);
+  }
+
+  /* ===================== Data layer (Supabase) ===================== */
+  function loadTransactions(){
+    sb.from("transactions").select("*").order("date", { ascending: false })
+      .then(function(res){
+        if(res.error){
+          toast("Error cargando datos: " + res.error.message);
+          return;
+        }
+        transactions = res.data || [];
+        renderDashboard();
+        renderHistory();
+      });
+  }
+
+  function insertTransaction(row, onDone){
+    row.user_id = currentUser.id;
+    sb.from("transactions").insert([row]).select().then(function(res){
+      if(res.error){
+        toast("Error al guardar: " + res.error.message);
+        return;
+      }
+      transactions.unshift(res.data[0]);
+      onDone && onDone();
+    });
+  }
+
+  function deleteTransactionRemote(id, onDone){
+    sb.from("transactions").delete().eq("id", id).then(function(res){
+      if(res.error){
+        toast("Error al eliminar: " + res.error.message);
+        return;
+      }
+      transactions = transactions.filter(function(t){ return t.id !== id; });
+      onDone && onDone();
+    });
+  }
+
+  /* ===================== Income form ===================== */
+  document.getElementById("income-date").value = todayStr();
+
+  document.getElementById("btn-submit-income").addEventListener("click", function(){
+    var date = document.getElementById("income-date").value || todayStr();
+    var desc = document.getElementById("income-desc").value.trim();
+    var amount = parseFloat(document.getElementById("income-amount").value);
+    var type = getSegValue('[data-group="income-type"]');
+    var method = getSegValue('[data-group="income-method"]');
+
+    var descOk = desc.length > 0;
+    var amountOk = !isNaN(amount) && amount > 0;
+    setFieldError("income-desc-field", !descOk);
+    setFieldError("income-amount-field", !amountOk);
+    if(!descOk || !amountOk) return;
+
+    var btn = this;
+    btn.disabled = true;
+    insertTransaction({
+      kind: "income", subtype: type, date: date,
+      description: desc, amount: amount, method: method
+    }, function(){
+      document.getElementById("income-desc").value = "";
+      document.getElementById("income-amount").value = "";
+      document.getElementById("income-date").value = todayStr();
+      btn.disabled = false;
+      toast("Ingreso registrado ✓");
+      renderDashboard();
+    });
+  });
+
+  /* ===================== Expense form ===================== */
+  document.getElementById("expense-date").value = todayStr();
+
+  document.getElementById("btn-submit-expense").addEventListener("click", function(){
+    var date = document.getElementById("expense-date").value || todayStr();
+    var desc = document.getElementById("expense-desc").value.trim();
+    var amount = parseFloat(document.getElementById("expense-amount").value);
+    var category = getSegValue('[data-group="expense-category"]');
+
+    var descOk = desc.length > 0;
+    var amountOk = !isNaN(amount) && amount > 0;
+    setFieldError("expense-desc-field", !descOk);
+    setFieldError("expense-amount-field", !amountOk);
+    if(!descOk || !amountOk) return;
+
+    var btn = this;
+    btn.disabled = true;
+    insertTransaction({
+      kind: "expense", subtype: category, date: date,
+      description: desc, amount: amount
+    }, function(){
+      document.getElementById("expense-desc").value = "";
+      document.getElementById("expense-amount").value = "";
+      document.getElementById("expense-date").value = todayStr();
+      btn.disabled = false;
+      toast("Gasto registrado ✓");
+      renderDashboard();
+    });
+  });
+
+  /* ===================== Dashboard ===================== */
+  var dashboardPeriod = "all";
+  document.querySelectorAll("#period-row .chip-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll("#period-row .chip-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      dashboardPeriod = btn.dataset.period;
+      renderDashboard();
+    });
+  });
+
+  function inPeriod(dateStr, period){
+    var d = new Date(dateStr + "T00:00:00");
+    var now = new Date();
+    if(period === "all") return true;
+    if(period === "today") return d.toDateString() === now.toDateString();
+    if(period === "week"){
+      var start = new Date(now);
+      start.setDate(now.getDate() - now.getDay());
+      start.setHours(0,0,0,0);
+      return d >= start;
+    }
+    if(period === "month"){
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }
+    return true;
+  }
+
+  function renderBreakdown(container, entries, colorVar){
+    var total = entries.reduce(function(s,e){ return s + e.amount; }, 0);
+    container.innerHTML = "";
+    if(total <= 0){
+      container.innerHTML = '<div class="empty-state" style="padding:20px 0;">Sin datos en este período.</div>';
+      return;
+    }
+    entries.forEach(function(e){
+      var pct = total > 0 ? Math.round((e.amount / total) * 100) : 0;
+      var row = document.createElement("div");
+      row.innerHTML =
+        '<div class="breakdown-row">' +
+          '<span class="breakdown-name">' + e.label + '</span>' +
+          '<span class="breakdown-amount">' + formatMoney(e.amount) + ' · ' + pct + '%</span>' +
+        '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:' + colorVar + ';"></div></div>';
+      container.appendChild(row);
+    });
+  }
+
+  function renderDashboard(){
+    var filtered = transactions.filter(function(t){ return inPeriod(t.date, dashboardPeriod); });
+    var incomeTx = filtered.filter(function(t){ return t.kind === "income"; });
+    var expenseTx = filtered.filter(function(t){ return t.kind === "expense"; });
+
+    var totalIncome = incomeTx.reduce(function(s,t){ return s + Number(t.amount); }, 0);
+    var totalExpense = expenseTx.reduce(function(s,t){ return s + Number(t.amount); }, 0);
+    var balance = totalIncome - totalExpense;
+
+    document.getElementById("stat-income").textContent = formatMoney(totalIncome);
+    document.getElementById("stat-expense").textContent = formatMoney(totalExpense);
+    document.getElementById("stat-balance").textContent = formatMoney(balance);
+    document.getElementById("stat-balance-card").classList.toggle("negative", balance < 0);
+
+    var incomeEntries = Object.keys(INCOME_TYPE_LABEL).map(function(key){
+      return { label: INCOME_TYPE_LABEL[key], amount: incomeTx.filter(function(t){ return t.subtype === key; }).reduce(function(s,t){ return s+Number(t.amount); }, 0) };
+    }).filter(function(e){ return e.amount > 0; });
+    renderBreakdown(document.getElementById("breakdown-income"), incomeEntries, "var(--income)");
+
+    var expenseEntries = Object.keys(EXPENSE_CATEGORY_LABEL).map(function(key){
+      return { label: EXPENSE_CATEGORY_LABEL[key], amount: expenseTx.filter(function(t){ return t.subtype === key; }).reduce(function(s,t){ return s+Number(t.amount); }, 0) };
+    }).filter(function(e){ return e.amount > 0; });
+    renderBreakdown(document.getElementById("breakdown-expense"), expenseEntries, "var(--expense)");
+  }
+
+  /* ===================== History ===================== */
+  var historyFilter = "all";
+  var historySearch = "";
+
+  document.querySelectorAll(".filter-chips .chip-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      document.querySelectorAll(".filter-chips .chip-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      historyFilter = btn.dataset.filter;
+      renderHistory();
+    });
+  });
+
+  document.getElementById("search-input").addEventListener("input", function(e){
+    historySearch = e.target.value.trim().toLowerCase();
+    renderHistory();
+  });
+
+  function detailLabel(t){
+    return t.kind === "income" ? INCOME_TYPE_LABEL[t.subtype] : EXPENSE_CATEGORY_LABEL[t.subtype];
+  }
+
+  function requestDelete(id, cellEl){
+    cellEl.innerHTML =
+      '<span class="confirm-inline">' +
+        '<button class="confirm-yes" data-confirm-yes>Borrar</button>' +
+        '<button class="confirm-no" data-confirm-no>Cancelar</button>' +
+      '</span>';
+    cellEl.querySelector("[data-confirm-yes]").addEventListener("click", function(){
+      deleteTransactionRemote(id, function(){
+        toast("Registro eliminado");
+        renderHistory();
+        renderDashboard();
+      });
+    });
+    cellEl.querySelector("[data-confirm-no]").addEventListener("click", function(){
+      renderHistory();
+    });
+  }
+
+  function renderHistory(){
+    var tbody = document.getElementById("history-body");
+    var emptyEl = document.getElementById("history-empty");
+
+    var list = transactions.slice().sort(function(a,b){
+      if(a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    if(historyFilter !== "all"){
+      list = list.filter(function(t){ return t.kind === historyFilter; });
+    }
+    if(historySearch){
+      list = list.filter(function(t){ return t.description.toLowerCase().indexOf(historySearch) !== -1; });
+    }
+
+    tbody.innerHTML = "";
+
+    if(list.length === 0){
+      emptyEl.style.display = "block";
+      document.querySelector("table.history-table").style.display = "none";
+      return;
+    }
+    emptyEl.style.display = "none";
+    document.querySelector("table.history-table").style.display = "";
+
+    list.forEach(function(t){
+      var tr = document.createElement("tr");
+      var isIncome = t.kind === "income";
+      var subLine = isIncome ? PAYMENT_METHOD_LABEL[t.method] : detailLabel(t);
+      var badgeClass = isIncome ? (t.subtype === "reparacion" ? "reparacion" : "income") : "expense";
+      var badgeLabel = isIncome ? INCOME_TYPE_LABEL[t.subtype] : "Egreso";
+
+      tr.innerHTML =
+        '<td data-label="Fecha">' + formatDate(t.date) + '</td>' +
+        '<td data-label="Tipo"><span class="badge ' + badgeClass + '">' + badgeLabel + '</span></td>' +
+        '<td data-label="Detalle" class="desc-cell">' +
+          escapeHtml(t.description) +
+          '<div class="sub">' + subLine + '</div>' +
+        '</td>' +
+        '<td data-label="Monto" class="amount-cell ' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "+" : "−") + formatMoney(t.amount) + '</td>' +
+        '<td data-label="Acción" class="action-cell"></td>';
+
+      var actionCell = tr.querySelector(".action-cell");
+      var delBtn = document.createElement("button");
+      delBtn.className = "icon-btn";
+      delBtn.title = "Eliminar";
+      delBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+      delBtn.addEventListener("click", function(){ requestDelete(t.id, actionCell); });
+      actionCell.appendChild(delBtn);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ===================== CSV export ===================== */
+  document.getElementById("btn-export").addEventListener("click", function(){
+    if(transactions.length === 0){
+      toast("No hay datos para exportar");
+      return;
+    }
+    var header = ["Fecha","Tipo","Subtipo/Categoria","Descripcion","Metodo de pago","Monto"];
+    var sorted = transactions.slice().sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+    var rows = sorted.map(function(t){
+      var isIncome = t.kind === "income";
+      return [
+        t.date,
+        isIncome ? "Ingreso" : "Egreso",
+        detailLabel(t),
+        '"' + t.description.replace(/"/g, '""') + '"',
+        isIncome ? PAYMENT_METHOD_LABEL[t.method] : "",
+        String(t.amount).replace(".", ",")
+      ].join(";");
+    });
+    var csv = "\ufeff" + [header.join(";")].concat(rows).join("\n");
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "taller_finanzas_" + todayStr() + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("CSV exportado");
+  });
+
+  /* ===================== Cotizador de reparaciones ===================== */
+
+  var WHATSAPP_NUMBER = (window.WHATSAPP_NUMBER || "").trim();
+
+  // Costo fijo del vidrio templado que se suma cuando la reparación es de módulo/pantalla.
+  // Editable acá, separado del resto de la lógica.
+  var VIDRIO_TEMPLADO_PRICE = 7000;
+
+  var REPAIR_TYPES = {
+    modulo:     { label: "Módulo / Pantalla", mlTerm: "modulo" },
+    bateria:    { label: "Batería",           mlTerm: "bateria" },
+    pin_carga:  { label: "Pin de carga",      mlTerm: "pin de carga" },
+    camara:     { label: "Cámara",            mlTerm: "camara" },
+    parlante:   { label: "Parlante",          mlTerm: "parlante" },
+    microfono:  { label: "Micrófono",         mlTerm: "microfono" }
+  };
+
+  if(!WHATSAPP_NUMBER || WHATSAPP_NUMBER.indexOf("PEGA_ACA") !== -1){
+    document.getElementById("cotizador-config-warning").style.display = "block";
+  }
+
+  var cotMarcaSelect = document.getElementById("cot-marca");
+  var cotMarcaOtraField = document.getElementById("cot-marca-otra-field");
+  var cotMarcaOtraInput = document.getElementById("cot-marca-otra");
+
+  cotMarcaSelect.addEventListener("change", function(){
+    cotMarcaOtraField.style.display = this.value === "otra" ? "block" : "none";
+  });
+
+  function getMarcaActual(){
+    if(cotMarcaSelect.value === "otra"){
+      return cotMarcaOtraInput.value.trim();
+    }
+    return cotMarcaSelect.value;
+  }
+
+  function cotHideStatus(){
+    var el = document.getElementById("cot-status");
+    el.classList.remove("show");
+    el.textContent = "";
+  }
+  function cotShowStatus(msg){
+    var el = document.getElementById("cot-status");
+    el.textContent = msg;
+    el.classList.add("show");
+  }
+
+  document.getElementById("btn-cotizar").addEventListener("click", function(){
+    cotHideStatus();
+
+    var marca = getMarcaActual();
+    var modelo = document.getElementById("cot-modelo").value.trim();
+    var repairKey = document.getElementById("cot-reparacion").value;
+    var repairType = REPAIR_TYPES[repairKey];
+
+    if(!marca){
+      cotShowStatus("⚠️ Indicá la marca del equipo.");
+      return;
+    }
+    if(!modelo){
+      cotShowStatus("⚠️ Escribí el modelo del equipo.");
+      return;
+    }
+
+    openQuoteModal();
+    renderModalLoading();
+
+    var query = marca + " " + modelo + " " + repairType.mlTerm;
+
+    fetch("/.netlify/functions/ml-search?q=" + encodeURIComponent(query))
+      .then(function(res){
+        if(!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(function(data){
+        var items = (data.results || [])
+          .map(function(r){ return { title: r.title, price: r.price, permalink: r.permalink }; })
+          .filter(function(it){ return it.price > 0; });
+
+        if(items.length === 0){
+          renderModalError("⚠️ No encontramos precios de referencia en Mercado Libre para este modelo. Probá escribiendo el modelo de otra forma.");
+          return;
+        }
+
+        var cheapest = items.reduce(function(a, b){ return b.price < a.price ? b : a; });
+        var repuestoPrice = cheapest.price;
+        var manoObra = repuestoPrice; // regla del taller: mano de obra al mismo costo que el repuesto
+        var vidrio = repairKey === "modulo" ? VIDRIO_TEMPLADO_PRICE : 0;
+        var total = repuestoPrice + manoObra + vidrio;
+
+        renderModalResult({
+          marca: marca,
+          modelo: modelo,
+          repairLabel: repairType.label,
+          repuestoPrice: repuestoPrice,
+          manoObra: manoObra,
+          vidrio: vidrio,
+          total: total,
+          fuenteTitulo: cheapest.title
+        });
+      })
+      .catch(function(err){
+        console.error("Error consultando Mercado Libre:", err);
+        renderModalError("⚠️ No fue posible consultar los precios. Intentá nuevamente.");
+      });
+  });
+
+  function openQuoteModal(){
+    document.getElementById("quote-modal").classList.add("open");
+  }
+  function closeQuoteModal(){
+    document.getElementById("quote-modal").classList.remove("open");
+  }
+  document.getElementById("btn-close-modal").addEventListener("click", closeQuoteModal);
+  document.getElementById("quote-modal").addEventListener("click", function(e){
+    if(e.target === this) closeQuoteModal();
+  });
+
+  function renderModalLoading(){
+    document.getElementById("modal-body").innerHTML =
+      '<div class="mq-loading">Consultando Mercado Libre...</div>';
+  }
+
+  function renderModalError(msg){
+    document.getElementById("modal-body").innerHTML =
+      '<div class="mq-loading">' + msg + '</div>';
+  }
+
+  function renderModalResult(q){
+    var html =
+      '<div class="mq-title">' + escapeHtml(q.marca + " " + q.modelo) + '</div>' +
+      '<div class="mq-subtitle">' + escapeHtml(q.repairLabel) + '</div>' +
+      '<div class="mq-line"><span>Repuesto (ref. Mercado Libre)</span><span class="mq-amount">' + formatMoney(q.repuestoPrice) + '</span></div>' +
+      '<div class="mq-line"><span>Mano de obra</span><span class="mq-amount">' + formatMoney(q.manoObra) + '</span></div>';
+
+    if(q.vidrio > 0){
+      html += '<div class="mq-line"><span>Vidrio templado</span><span class="mq-amount">' + formatMoney(q.vidrio) + '</span></div>';
+    }
+
+    html +=
+      '<div class="mq-total"><span>Total</span><span class="mq-total-amount">' + formatMoney(q.total) + '</span></div>' +
+      '<div class="mq-source">Referencia: ' + escapeHtml(q.fuenteTitulo) + '</div>' +
+      '<button class="whatsapp-btn" id="btn-whatsapp-quote">' +
+        '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 6.32A7.85 7.85 0 0 0 12.05 4a7.94 7.94 0 0 0-6.9 11.9L4 20l4.2-1.1a7.9 7.9 0 0 0 3.8 1h0a7.94 7.94 0 0 0 7.94-7.94 7.9 7.9 0 0 0-2.34-5.64zm-5.55 12.2h0a6.6 6.6 0 0 1-3.36-.92l-.24-.14-2.5.65.67-2.43-.16-.25a6.6 6.6 0 1 1 12.26-3.47 6.56 6.56 0 0 1-6.67 6.56zm3.6-4.92c-.2-.1-1.17-.58-1.35-.64s-.31-.1-.44.1-.5.64-.62.77-.23.15-.43.05a5.4 5.4 0 0 1-1.6-.98 6 6 0 0 1-1.1-1.37c-.12-.2 0-.3.09-.4s.2-.23.29-.35a1.3 1.3 0 0 0 .2-.33.36.36 0 0 0 0-.35c-.05-.1-.44-1.06-.6-1.45s-.32-.33-.44-.33h-.38a.72.72 0 0 0-.53.25 2.2 2.2 0 0 0-.68 1.63 3.8 3.8 0 0 0 .8 2.02 8.7 8.7 0 0 0 3.33 2.94c.47.2.83.32 1.11.41a2.7 2.7 0 0 0 1.24.08 2 2 0 0 0 1.32-.93 1.6 1.6 0 0 0 .11-.93c-.05-.08-.18-.13-.38-.23z"/></svg>' +
+        'Enviar por WhatsApp' +
+      '</button>';
+
+    document.getElementById("modal-body").innerHTML = html;
+
+    document.getElementById("btn-whatsapp-quote").addEventListener("click", function(){
+      if(!WHATSAPP_NUMBER || WHATSAPP_NUMBER.indexOf("PEGA_ACA") !== -1){
+        toast("Falta configurar tu número de WhatsApp en el archivo.");
+        return;
+      }
+      var lineas = "Repuesto: " + formatMoney(q.repuestoPrice) + "\nMano de obra: " + formatMoney(q.manoObra);
+      if(q.vidrio > 0){
+        lineas += "\nVidrio templado: " + formatMoney(q.vidrio);
+      }
+      var msg = "Hola, te paso la cotización de reparación:\n\n" +
+        "Equipo: " + q.marca + " " + q.modelo + "\n" +
+        "Reparación: " + q.repairLabel + "\n\n" +
+        lineas + "\n\n" +
+        "Total: " + formatMoney(q.total) + "\n\n" +
+        "El precio está sujeto a revisión del equipo.";
+      window.open("https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(msg), "_blank");
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
